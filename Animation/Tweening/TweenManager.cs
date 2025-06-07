@@ -23,11 +23,11 @@ namespace Unity2DFramework.Animation.Tweening
         [SerializeField] private float defaultDuration = 0.3f;
         [SerializeField] private Ease defaultEase = Ease.OutQuart;
         
-                // 활성 트윈들을 추적하기 위한 딕셔너리
-    private Dictionary<string, Tween> activeTweens = new Dictionary<string, Tween>();
-    
-    // UI 요소별 특화 트윈 (ID 기반)
-    private Dictionary<string, Tween> uiTweens = new Dictionary<string, Tween>();
+        // 활성 트윈들을 추적하기 위한 딕셔너리
+        private Dictionary<string, Tween> activeTweens = new Dictionary<string, Tween>();
+        
+        // UI 요소별 특화 트윈 (ID 기반)
+        private Dictionary<string, Tween> uiTweens = new Dictionary<string, Tween>();
         
         private void Awake()
         {
@@ -218,7 +218,7 @@ namespace Unity2DFramework.Animation.Tweening
         /// <summary>
         /// 오브젝트 바운스 효과
         /// </summary>
-        public Tween Bounce(Transform transform, float bounceHeight = 1f, float duration = -1f, string tweenId = null)
+        public Tween Bounce(Transform transform, float bounceHeight = 1f, float duration = -1f)
         {
             if (duration < 0) duration = defaultDuration;
             
@@ -229,35 +229,23 @@ namespace Unity2DFramework.Animation.Tweening
             sequence.Append(transform.DOMove(bouncePos, duration * 0.5f).SetEase(Ease.OutQuad));
             sequence.Append(transform.DOMove(originalPos, duration * 0.5f).SetEase(Ease.InQuad));
             
-            if (!string.IsNullOrEmpty(tweenId))
-            {
-                RegisterTween(tweenId, sequence);
-            }
-            
             return sequence;
         }
         
         /// <summary>
         /// 오브젝트 흔들기 효과
         /// </summary>
-        public Tween Shake(Transform transform, float strength = 1f, float duration = -1f, int vibrato = 10, string tweenId = null)
+        public Tween Shake(Transform transform, float strength = 1f, float duration = -1f, int vibrato = 10)
         {
             if (duration < 0) duration = defaultDuration;
             
-            var tween = transform.DOShakePosition(duration, strength, vibrato);
-            
-            if (!string.IsNullOrEmpty(tweenId))
-            {
-                RegisterTween(tweenId, tween);
-            }
-            
-            return tween;
+            return transform.DOShakePosition(duration, strength, vibrato);
         }
         
         /// <summary>
         /// 오브젝트 펄스 효과 (크기 변화)
         /// </summary>
-        public Tween Pulse(Transform transform, float scaleMultiplier = 1.2f, float duration = -1f, string tweenId = null)
+        public Tween Pulse(Transform transform, float scaleMultiplier = 1.2f, float duration = -1f)
         {
             if (duration < 0) duration = defaultDuration;
             
@@ -269,29 +257,17 @@ namespace Unity2DFramework.Animation.Tweening
             sequence.Append(transform.DOScale(originalScale, duration * 0.5f).SetEase(Ease.InQuad));
             sequence.SetLoops(-1, LoopType.Restart);
             
-            if (!string.IsNullOrEmpty(tweenId))
-            {
-                RegisterTween(tweenId, sequence);
-            }
-            
             return sequence;
         }
         
         /// <summary>
         /// 오브젝트 회전 애니메이션
         /// </summary>
-        public Tween RotateLoop(Transform transform, Vector3 rotation, float duration = 1f, string tweenId = null)
+        public Tween RotateLoop(Transform transform, Vector3 rotation, float duration = 1f)
         {
-            var tween = transform.DORotate(rotation, duration, RotateMode.FastBeyond360)
+            return transform.DORotate(rotation, duration, RotateMode.FastBeyond360)
                           .SetLoops(-1, LoopType.Incremental)
                           .SetEase(Ease.Linear);
-            
-            if (!string.IsNullOrEmpty(tweenId))
-            {
-                RegisterTween(tweenId, tween);
-            }
-            
-            return tween;
         }
         
         #endregion
@@ -398,46 +374,25 @@ namespace Unity2DFramework.Animation.Tweening
         /// <summary>
         /// 지연 실행
         /// </summary>
-        public Tween DelayedCall(float delay, System.Action callback, string tweenId = null)
+        public Tween DelayedCall(float delay, System.Action callback)
         {
-            var tween = DOVirtual.DelayedCall(delay, callback);
-            
-            if (!string.IsNullOrEmpty(tweenId))
-            {
-                RegisterTween(tweenId, tween);
-            }
-            
-            return tween;
+            return DOVirtual.DelayedCall(delay, callback);
         }
         
         /// <summary>
         /// 값 보간
         /// </summary>
-        public Tween InterpolateValue(float from, float to, float duration, System.Action<float> onUpdate, string tweenId = null)
+        public Tween InterpolateValue(float from, float to, float duration, System.Action<float> onUpdate)
         {
-            var tween = DOVirtual.Float(from, to, duration, onUpdate);
-            
-            if (!string.IsNullOrEmpty(tweenId))
-            {
-                RegisterTween(tweenId, tween);
-            }
-            
-            return tween;
+            return DOVirtual.Float(from, to, duration, onUpdate);
         }
         
         /// <summary>
         /// 색상 보간
         /// </summary>
-        public Tween InterpolateColor(Color from, Color to, float duration, System.Action<Color> onUpdate, string tweenId = null)
+        public Tween InterpolateColor(Color from, Color to, float duration, System.Action<Color> onUpdate)
         {
-            var tween = DOVirtual.Color(from, to, duration, onUpdate);
-            
-            if (!string.IsNullOrEmpty(tweenId))
-            {
-                RegisterTween(tweenId, tween);
-            }
-            
-            return tween;
+            return DOVirtual.Color(from, to, duration, onUpdate);
         }
         
         /// <summary>

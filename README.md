@@ -185,3 +185,143 @@ rectTransform.BounceIn(0.5f);
 ---
 
 **Unity 2D 게임 개발을 더 효율적으로! 🎮**
+
+# Unity2D 게임 개발 프레임워크 - 구글 시트 데이터 관리 시스템
+
+## 개요
+
+Unity2D 게임 개발 프레임워크의 구글 시트 데이터 관리 시스템은 게임 데이터를 Google Spreadsheet에서 관리하고, 이를 Unity의 ScriptableObject로 쉽게 변환할 수 있는 강력한 도구입니다. 이 시스템을 사용하면 게임 밸런싱 작업이나 콘텐츠 업데이트를 프로그래머가 아닌 기획자도 쉽게 할 수 있습니다.
+
+## 주요 기능
+
+- **구글 스프레드시트 데이터 가져오기**: Google Sheets API를 통해 시트 데이터를 가져옵니다.
+- **JSON 파일 자동 생성**: 스프레드시트 데이터를 구조화된 JSON 파일로 변환합니다.
+- **데이터 클래스 자동 생성**: JSON 데이터 구조에 맞는 C# 클래스를 자동으로 생성합니다.
+- **ScriptableObject 자동 생성**: 데이터를 Unity의 ScriptableObject로 변환합니다.
+- **대량 처리 지원**: 여러 시트를 한 번에 처리할 수 있는 배치 기능을 제공합니다.
+- **다양한 데이터 타입 지원**: int, float, string 기본 타입부터 List, Dictionary, Enum 등 복잡한 데이터 구조까지 지원합니다.
+
+## 시스템 구성
+
+- **GoogleSheetManager**: 구글 시트 데이터를 가져오고 처리하는 에디터 도구
+- **GoogleSheetFacade**: GoogleSheetManager의 복잡한 기능을 단순화하여 제공하는 Facade 패턴 구현체
+- **DynamicMenuCreator**: JSON 데이터를 ScriptableObject로 변환하는 유틸리티 클래스
+
+## 사용 방법
+
+### 1. 구글 스프레드시트 설정
+
+1. [Google Apps Script](https://script.google.com/) 에서 새 프로젝트를 생성합니다.
+2. 다음 스크립트를 추가하고 배포합니다:
+
+```javascript
+function doGet() {
+  var ss = SpreadsheetApp.openById("YOUR_SPREADSHEET_ID");
+  var sheets = ss.getSheets();
+  var sheetData = [];
+  
+  for (var i = 0; i < sheets.length; i++) {
+    var sheet = sheets[i];
+    sheetData.push({
+      sheetName: sheet.getName(),
+      sheetId: sheet.getSheetId()
+    });
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({sheetData: sheetData}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+```
+
+3. 스크립트를 웹 앱으로 배포하고 생성된 URL을 복사합니다.
+
+### 2. 에디터 도구 사용
+
+1. Unity 에디터에서 `Tools > Unity2D Framework > Google Sheet Parser` 메뉴를 선택합니다.
+2. Sheet API URL 필드에 위에서 복사한 URL을 입력합니다.
+3. Sheet URL 필드에 구글 스프레드시트 URL을 입력합니다.
+4. "시트 데이터 가져오기" 버튼을 클릭하여 시트 목록을 불러옵니다.
+5. "모든 시트 가져오기 및 파싱" 버튼을 클릭하여 모든 시트를 처리하거나, 특정 시트를 선택한 후 "선택한 시트 파싱 및 클래스 생성" 버튼을 클릭합니다.
+6. JSON 파일, 데이터 클래스, ScriptableObject 클래스가 자동 생성됩니다.
+7. "JSON에서 ScriptableObject 생성 메뉴 만들기" 버튼을 클릭하여 ScriptableObject 생성 메뉴를 만듭니다.
+8. `Tools > Unity2D Framework > JsonToSO` 메뉴에서 원하는 데이터 타입을 선택하여 ScriptableObject를 생성합니다.
+
+### 3. 스프레드시트 데이터 형식
+
+스프레드시트는 다음과 같은 형식으로 구성해야 합니다:
+
+1. **첫 번째 행**: 필드 설명 또는 헤더 (DB_IGNORE 값을 넣으면 해당 컬럼 무시)
+2. **두 번째 행**: 필드 이름 (C# 변수명으로 사용됨)
+3. **세 번째 행**: 데이터 타입 (int, float, string, List<int>, Dictionary<string, int> 등)
+4. **네 번째 행부터**: 실제 데이터 값
+
+### 4. 지원하는 데이터 타입
+
+- 기본 타입: `int`, `float`, `double`, `bool`, `string`, `byte`, `long`
+- 배열 타입: `int[]`, `float[]`, `string[]`
+- 리스트 타입: `List<T>` (T는 기본 타입)
+- 딕셔너리 타입: `Dictionary<K, V>` (K, V는 기본 타입)
+- 유니티 타입: `Vector2`
+- 특수 타입: `DateTime`, `TimeSpan`, `Guid`
+- 사용자 정의 Enum 타입
+
+### 5. 데이터 형식 예시
+
+```
+// 첫 번째 행: 설명
+아이디    이름     체력    공격력   속도    아이템 목록      능력치
+// 두 번째 행: 필드 이름
+id        name    hp      attack   speed   items           stats
+// 세 번째 행: 데이터 타입
+int       string  int     float    float   List<string>    Dictionary<string, float>
+// 네 번째 행부터: 실제 데이터
+1         용사    100     15.5     5.2     검,방패,물약    힘:10.5;민첩:8.2;지능:5.0
+2         마법사  80      20.0     4.5     지팡이,로브     힘:4.2;민첩:6.0;지능:15.5
+```
+
+## 파일 구조
+
+- `/Utils/Editor/GoogleSheetManager.cs`: 구글 시트 관리 에디터 도구
+- `/Utils/Editor/DynamicMenuCreator.cs`: JSON을 ScriptableObject로 변환하는 유틸리티
+- `/Resources/JsonFiles/{SheetName}.json`: 생성된 JSON 파일
+- `/Resources/DataClass/{SheetName}Data.cs`: 생성된 데이터 클래스
+- `/Scripts/Data/{SheetName}SO.cs`: 생성된 ScriptableObject 클래스
+- `/Scripts/Utils/JsonToSO.cs`: ScriptableObject 생성 메뉴
+- `/Resources/ScriptableObjects/{SheetName}/{ID}.asset`: 생성된 ScriptableObject 에셋
+
+## 활용 예시
+
+```csharp
+// 데이터 로드 예시
+public class DataManager : MonoBehaviour
+{
+    // 리소스 폴더에서 직접 로드
+    public ItemSO GetItem(int id)
+    {
+        return Resources.Load<ItemSO>($"ScriptableObjects/Item/{id}");
+    }
+    
+    // 모든 아이템 로드
+    public List<ItemSO> GetAllItems()
+    {
+        return Resources.LoadAll<ItemSO>("ScriptableObjects/Item").ToList();
+    }
+}
+```
+
+## 주의 사항
+
+- 구글 스프레드시트는 반드시 웹에서 접근 가능하도록 공유 설정되어 있어야 합니다.
+- 에디터 전용 기능이므로 빌드에는 포함되지 않습니다. 
+- 데이터 변경 후에는 반드시 다시 파싱 작업을 수행해야 합니다.
+- 대량의 데이터를 처리할 경우 시간이 소요될 수 있습니다.
+
+## 확장 가능성
+
+- **커스텀 파서**: 특수한 데이터 형식을 위한 커스텀 파서 추가 가능
+- **자동화 스크립트**: CI/CD 파이프라인과 연동하여 데이터 자동 업데이트 가능
+- **실시간 데이터 업데이트**: 런타임에서 데이터 업데이트 기능 추가 가능
+
+---
+
+이 시스템을 활용하면 게임 데이터 관리를 효율적으로 할 수 있으며, 기획자와 개발자 간의 협업을 원활하게 할 수 있습니다. 또한, 데이터 구조의 변경이나 추가가 용이하여 게임 개발 과정에서 유연하게 대응할 수 있습니다.
