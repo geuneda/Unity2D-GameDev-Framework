@@ -1,20 +1,258 @@
 using UnityEngine;
 using System.Collections.Generic;
-using System.Collections;
 
-namespace Unity2DFramework.Utilities.Patterns
+/// <summary>
+/// 게임 오브젝트 풀링 시스템
+/// 오브젝트의 생성 및 삭제를 최적화하여 성능을 향상시킵니다.
+/// </summary>
+public class ObjectPool : MonoBehaviour
 {
-    /// <summary>
-    /// 제네릭 오브젝트 풀 클래스
-    /// 메모리 효율성을 위해 오브젝트를 재사용하는 패턴
-    /// </summary>
-    public class ObjectPool<T> where T : class, new()
+    [System.Serializable]
+    public class Pool
     {
-        private readonly Stack<T> pool = new Stack<T>();
-        private readonly System.Func<T> createFunc;
-        private readonly System.Action<T> onGet;
-        private readonly System.Action<T> onReturn;
+        public string tag;
+        public GameObject prefab;
+        public int size;
+    }
+    
+    #region 싱글톤
+    private static ObjectPool _instance;
+    
+    public static ObjectPool Instance
+    {
+        get
+        {
+            if (_instance == null)
+            {
+                GameObject go = new GameObject("ObjectPool");
+                _instance = go.AddComponent<ObjectPool>();
+                DontDestroyOnLoad(go);
+            }
+            return _instance;
+        }
+    }
+    #endregion
+    
+    [SerializeField] private List<Pool> _pools = new List<Pool>();
+    private Dictionary<string, Queue<GameObject>> _poolDictionary;
+    private Dictionary<GameObject, string> _spawnedObjects;
+    
+    private bool _isInitialized = false;
+    
+    /// <summary>
+    /// 오브젝트 풀을 초기화합니다.
+    /// </summary>
+    public void Initialize()
+    {
+        if (_isInitialized) return;
         
-        public ObjectPool(System.Func<T> createFunc = null, 
-                         System.Action<T> onGet = null, 
-                         System.Action<T> onReturn = null)\n        {\n            this.createFunc = createFunc ?? (() => new T());\n            this.onGet = onGet;\n            this.onReturn = onReturn;\n        }\n        \n        /// <summary>\n        /// 풀에서 오브젝트 가져오기\n        /// </summary>\n        public T Get()\n        {\n            T item = pool.Count > 0 ? pool.Pop() : createFunc();\n            onGet?.Invoke(item);\n            return item;\n        }\n        \n        /// <summary>\n        /// 오브젝트를 풀에 반환\n        /// </summary>\n        public void Return(T item)\n        {\n            if (item != null)\n            {\n                onReturn?.Invoke(item);\n                pool.Push(item);\n            }\n        }\n        \n        /// <summary>\n        /// 풀 크기 반환\n        /// </summary>\n        public int Count => pool.Count;\n        \n        /// <summary>\n        /// 풀 비우기\n        /// </summary>\n        public void Clear()\n        {\n            pool.Clear();\n        }\n    }\n    \n    /// <summary>\n    /// GameObject용 오브젝트 풀\n    /// Unity의 GameObject를 효율적으로 관리\n    /// </summary>\n    public class GameObjectPool : MonoBehaviour\n    {\n        [Header(\"풀 설정\")]\n        [SerializeField] private GameObject prefab;\n        [SerializeField] private int initialPoolSize = 10;\n        [SerializeField] private int maxPoolSize = 50;\n        [SerializeField] private bool expandPool = true;\n        \n        private Queue<GameObject> pool = new Queue<GameObject>();\n        private List<GameObject> activeObjects = new List<GameObject>();\n        \n        private void Start()\n        {\n            InitializePool();\n        }\n        \n        /// <summary>\n        /// 풀 초기화\n        /// </summary>\n        private void InitializePool()\n        {\n            if (prefab == null)\n            {\n                Debug.LogError(\"[GameObjectPool] Prefab이 설정되지 않았습니다!\");\n                return;\n            }\n            \n            // 초기 오브젝트들 생성\n            for (int i = 0; i < initialPoolSize; i++)\n            {\n                GameObject obj = CreateNewObject();\n                pool.Enqueue(obj);\n            }\n            \n            Debug.Log($\"[GameObjectPool] {prefab.name} 풀 초기화 완료 (크기: {initialPoolSize})\");\n        }\n        \n        /// <summary>\n        /// 새로운 오브젝트 생성\n        /// </summary>\n        private GameObject CreateNewObject()\n        {\n            GameObject obj = Instantiate(prefab, transform);\n            obj.SetActive(false);\n            \n            // 풀 컴포넌트 추가 (자동 반환을 위해)\n            PooledObject pooledComponent = obj.GetComponent<PooledObject>();\n            if (pooledComponent == null)\n            {\n                pooledComponent = obj.AddComponent<PooledObject>();\n            }\n            pooledComponent.SetPool(this);\n            \n            return obj;\n        }\n        \n        /// <summary>\n        /// 풀에서 오브젝트 가져오기\n        /// </summary>\n        public GameObject Get()\n        {\n            GameObject obj;\n            \n            if (pool.Count > 0)\n            {\n                obj = pool.Dequeue();\n            }\n            else if (expandPool && activeObjects.Count < maxPoolSize)\n            {\n                obj = CreateNewObject();\n                Debug.Log($\"[GameObjectPool] 풀 확장: {prefab.name}\");\n            }\n            else\n            {\n                Debug.LogWarning($\"[GameObjectPool] 풀이 가득참: {prefab.name}\");\n                return null;\n            }\n            \n            obj.SetActive(true);\n            activeObjects.Add(obj);\n            \n            return obj;\n        }\n        \n        /// <summary>\n        /// 특정 위치에서 오브젝트 가져오기\n        /// </summary>\n        public GameObject Get(Vector3 position, Quaternion rotation)\n        {\n            GameObject obj = Get();\n            if (obj != null)\n            {\n                obj.transform.position = position;\n                obj.transform.rotation = rotation;\n            }\n            return obj;\n        }\n        \n        /// <summary>\n        /// 오브젝트를 풀에 반환\n        /// </summary>\n        public void Return(GameObject obj)\n        {\n            if (obj == null) return;\n            \n            if (activeObjects.Contains(obj))\n            {\n                activeObjects.Remove(obj);\n                obj.SetActive(false);\n                obj.transform.SetParent(transform);\n                pool.Enqueue(obj);\n            }\n            else\n            {\n                Debug.LogWarning($\"[GameObjectPool] 이 풀에 속하지 않는 오브젝트입니다: {obj.name}\");\n            }\n        }\n        \n        /// <summary>\n        /// 모든 활성 오브젝트를 풀에 반환\n        /// </summary>\n        public void ReturnAll()\n        {\n            for (int i = activeObjects.Count - 1; i >= 0; i--)\n            {\n                Return(activeObjects[i]);\n            }\n        }\n        \n        /// <summary>\n        /// 지연 반환 (코루틴)\n        /// </summary>\n        public void ReturnAfterDelay(GameObject obj, float delay)\n        {\n            StartCoroutine(ReturnAfterDelayCoroutine(obj, delay));\n        }\n        \n        private IEnumerator ReturnAfterDelayCoroutine(GameObject obj, float delay)\n        {\n            yield return new WaitForSeconds(delay);\n            Return(obj);\n        }\n        \n        // 프로퍼티들\n        public int PoolSize => pool.Count;\n        public int ActiveCount => activeObjects.Count;\n        public int TotalCount => pool.Count + activeObjects.Count;\n        public GameObject Prefab => prefab;\n    }\n    \n    /// <summary>\n    /// 풀링된 오브젝트에 붙이는 컴포넌트\n    /// 자동 반환 기능 제공\n    /// </summary>\n    public class PooledObject : MonoBehaviour\n    {\n        private GameObjectPool parentPool;\n        private float autoReturnTime = -1f;\n        private Coroutine autoReturnCoroutine;\n        \n        /// <summary>\n        /// 부모 풀 설정\n        /// </summary>\n        public void SetPool(GameObjectPool pool)\n        {\n            parentPool = pool;\n        }\n        \n        /// <summary>\n        /// 자동 반환 시간 설정\n        /// </summary>\n        public void SetAutoReturnTime(float time)\n        {\n            autoReturnTime = time;\n            \n            if (autoReturnCoroutine != null)\n            {\n                StopCoroutine(autoReturnCoroutine);\n            }\n            \n            if (time > 0f)\n            {\n                autoReturnCoroutine = StartCoroutine(AutoReturnCoroutine());\n            }\n        }\n        \n        /// <summary>\n        /// 수동으로 풀에 반환\n        /// </summary>\n        public void ReturnToPool()\n        {\n            if (parentPool != null)\n            {\n                if (autoReturnCoroutine != null)\n                {\n                    StopCoroutine(autoReturnCoroutine);\n                    autoReturnCoroutine = null;\n                }\n                \n                parentPool.Return(gameObject);\n            }\n            else\n            {\n                Debug.LogWarning($\"[PooledObject] {gameObject.name}에 부모 풀이 설정되지 않았습니다!\");\n            }\n        }\n        \n        /// <summary>\n        /// 자동 반환 코루틴\n        /// </summary>\n        private IEnumerator AutoReturnCoroutine()\n        {\n            yield return new WaitForSeconds(autoReturnTime);\n            ReturnToPool();\n        }\n        \n        private void OnEnable()\n        {\n            // 오브젝트가 활성화될 때 자동 반환 타이머 시작\n            if (autoReturnTime > 0f)\n            {\n                SetAutoReturnTime(autoReturnTime);\n            }\n        }\n        \n        private void OnDisable()\n        {\n            // 오브젝트가 비활성화될 때 코루틴 정리\n            if (autoReturnCoroutine != null)\n            {\n                StopCoroutine(autoReturnCoroutine);\n                autoReturnCoroutine = null;\n            }\n        }\n    }\n    \n    /// <summary>\n    /// 오브젝트 풀 매니저\n    /// 여러 종류의 풀을 중앙에서 관리\n    /// </summary>\n    public class PoolManager : MonoBehaviour\n    {\n        public static PoolManager Instance { get; private set; }\n        \n        [Header(\"풀 프리팹들\")]\n        [SerializeField] private PoolData[] poolDatas;\n        \n        private Dictionary<string, GameObjectPool> pools = new Dictionary<string, GameObjectPool>();\n        \n        [System.Serializable]\n        public class PoolData\n        {\n            public string poolName;\n            public GameObject prefab;\n            public int initialSize = 10;\n            public int maxSize = 50;\n            public bool expandPool = true;\n        }\n        \n        private void Awake()\n        {\n            if (Instance == null)\n            {\n                Instance = this;\n                DontDestroyOnLoad(gameObject);\n                InitializePools();\n            }\n            else\n            {\n                Destroy(gameObject);\n            }\n        }\n        \n        /// <summary>\n        /// 모든 풀 초기화\n        /// </summary>\n        private void InitializePools()\n        {\n            foreach (var poolData in poolDatas)\n            {\n                CreatePool(poolData);\n            }\n            \n            Debug.Log($\"[PoolManager] {pools.Count}개의 풀 초기화 완료\");\n        }\n        \n        /// <summary>\n        /// 새로운 풀 생성\n        /// </summary>\n        private void CreatePool(PoolData data)\n        {\n            if (pools.ContainsKey(data.poolName))\n            {\n                Debug.LogWarning($\"[PoolManager] 이미 존재하는 풀 이름: {data.poolName}\");\n                return;\n            }\n            \n            GameObject poolObject = new GameObject($\"Pool_{data.poolName}\");\n            poolObject.transform.SetParent(transform);\n            \n            GameObjectPool pool = poolObject.AddComponent<GameObjectPool>();\n            // 풀 설정은 인스펙터에서 직접 설정하거나 코드로 설정\n            \n            pools[data.poolName] = pool;\n        }\n        \n        /// <summary>\n        /// 풀에서 오브젝트 가져오기\n        /// </summary>\n        public GameObject Get(string poolName)\n        {\n            if (pools.ContainsKey(poolName))\n            {\n                return pools[poolName].Get();\n            }\n            \n            Debug.LogError($\"[PoolManager] 존재하지 않는 풀: {poolName}\");\n            return null;\n        }\n        \n        /// <summary>\n        /// 풀에서 오브젝트 가져오기 (위치, 회전 지정)\n        /// </summary>\n        public GameObject Get(string poolName, Vector3 position, Quaternion rotation)\n        {\n            if (pools.ContainsKey(poolName))\n            {\n                return pools[poolName].Get(position, rotation);\n            }\n            \n            Debug.LogError($\"[PoolManager] 존재하지 않는 풀: {poolName}\");\n            return null;\n        }\n        \n        /// <summary>\n        /// 모든 풀의 활성 오브젝트들을 반환\n        /// </summary>\n        public void ReturnAllToPool()\n        {\n            foreach (var pool in pools.Values)\n            {\n                pool.ReturnAll();\n            }\n        }\n    }\n}"
+        _poolDictionary = new Dictionary<string, Queue<GameObject>>();
+        _spawnedObjects = new Dictionary<GameObject, string>();
+        
+        foreach (Pool pool in _pools)
+        {
+            Queue<GameObject> objectPool = new Queue<GameObject>();
+            
+            GameObject poolParent = new GameObject($"{pool.tag}_Pool");
+            poolParent.transform.SetParent(transform);
+            
+            for (int i = 0; i < pool.size; i++)
+            {
+                GameObject obj = Instantiate(pool.prefab, poolParent.transform);
+                obj.SetActive(false);
+                objectPool.Enqueue(obj);
+            }
+            
+            _poolDictionary.Add(pool.tag, objectPool);
+        }
+        
+        _isInitialized = true;
+        Debug.Log("ObjectPool이 초기화되었습니다.");
+    }
+    
+    /// <summary>
+    /// 풀에 새로운 프리팹을 등록합니다.
+    /// </summary>
+    public void RegisterPool(string tag, GameObject prefab, int size)
+    {
+        if (_poolDictionary.ContainsKey(tag))
+        {
+            Debug.LogWarning($"이미 '{tag}' 태그를 가진 풀이 존재합니다.");
+            return;
+        }
+        
+        Queue<GameObject> objectPool = new Queue<GameObject>();
+        
+        GameObject poolParent = new GameObject($"{tag}_Pool");
+        poolParent.transform.SetParent(transform);
+        
+        for (int i = 0; i < size; i++)
+        {
+            GameObject obj = Instantiate(prefab, poolParent.transform);
+            obj.SetActive(false);
+            objectPool.Enqueue(obj);
+        }
+        
+        _poolDictionary.Add(tag, objectPool);
+        
+        // Pool 리스트에도 추가
+        Pool newPool = new Pool
+        {
+            tag = tag,
+            prefab = prefab,
+            size = size
+        };
+        
+        _pools.Add(newPool);
+    }
+    
+    /// <summary>
+    /// 풀에서 오브젝트를 가져와 지정된 위치에 스폰합니다.
+    /// </summary>
+    public GameObject SpawnFromPool(string tag, Vector3 position, Quaternion rotation)
+    {
+        if (!_poolDictionary.ContainsKey(tag))
+        {
+            Debug.LogError($"'{tag}' 태그를 가진 풀이 존재하지 않습니다.");
+            return null;
+        }
+        
+        // 풀에 오브젝트가 없으면 동적으로 확장
+        if (_poolDictionary[tag].Count == 0)
+        {
+            ExpandPool(tag);
+        }
+        
+        GameObject objectToSpawn = _poolDictionary[tag].Dequeue();
+        
+        objectToSpawn.transform.position = position;
+        objectToSpawn.transform.rotation = rotation;
+        objectToSpawn.SetActive(true);
+        
+        // IPooledObject 인터페이스 구현 확인 및 호출
+        IPooledObject pooledObj = objectToSpawn.GetComponent<IPooledObject>();
+        pooledObj?.OnObjectSpawn();
+        
+        // 스폰된 오브젝트 추적
+        _spawnedObjects[objectToSpawn] = tag;
+        
+        return objectToSpawn;
+    }
+    
+    /// <summary>
+    /// 오브젝트를 풀로 반환합니다.
+    /// </summary>
+    public void ReturnToPool(GameObject obj)
+    {
+        if (_spawnedObjects.TryGetValue(obj, out string tag))
+        {
+            ReturnToPool(obj, tag);
+        }
+        else
+        {
+            Debug.LogWarning("이 오브젝트는 풀에서 스폰되지 않았습니다.");
+        }
+    }
+    
+    /// <summary>
+    /// 오브젝트를 지정된 태그의 풀로 반환합니다.
+    /// </summary>
+    public void ReturnToPool(GameObject obj, string tag)
+    {
+        if (!_poolDictionary.ContainsKey(tag))
+        {
+            Debug.LogError($"'{tag}' 태그를 가진 풀이 존재하지 않습니다.");
+            return;
+        }
+        
+        obj.SetActive(false);
+        _poolDictionary[tag].Enqueue(obj);
+        
+        // 스폰된 오브젝트 목록에서 제거
+        if (_spawnedObjects.ContainsKey(obj))
+        {
+            _spawnedObjects.Remove(obj);
+        }
+    }
+    
+    /// <summary>
+    /// 풀의 크기를 확장합니다.
+    /// </summary>
+    private void ExpandPool(string tag)
+    {
+        Pool poolToExpand = _pools.Find(p => p.tag == tag);
+        
+        if (poolToExpand == null)
+        {
+            Debug.LogError($"'{tag}' 태그를 가진 풀 정보를 찾을 수 없습니다.");
+            return;
+        }
+        
+        Transform poolParent = transform.Find($"{tag}_Pool");
+        
+        // 원래 크기의 절반만큼 추가
+        int expandSize = Mathf.Max(1, poolToExpand.size / 2);
+        
+        Debug.Log($"'{tag}' 풀을 {expandSize}개 확장합니다.");
+        
+        for (int i = 0; i < expandSize; i++)
+        {
+            GameObject obj = Instantiate(poolToExpand.prefab, poolParent);
+            obj.SetActive(false);
+            _poolDictionary[tag].Enqueue(obj);
+        }
+        
+        // Pool 크기 업데이트
+        poolToExpand.size += expandSize;
+    }
+    
+    /// <summary>
+    /// 태그에 해당하는 모든 활성 오브젝트를 풀로 반환합니다.
+    /// </summary>
+    public void ReturnAllToPool(string tag)
+    {
+        if (!_poolDictionary.ContainsKey(tag))
+        {
+            Debug.LogError($"'{tag}' 태그를 가진 풀이 존재하지 않습니다.");
+            return;
+        }
+        
+        // 현재 스폰된 모든 오브젝트 중 해당 태그를 가진 것을 찾아 반환
+        var objectsToReturn = new List<GameObject>();
+        
+        foreach (var kvp in _spawnedObjects)
+        {
+            if (kvp.Value == tag)
+            {
+                objectsToReturn.Add(kvp.Key);
+            }
+        }
+        
+        foreach (var obj in objectsToReturn)
+        {
+            ReturnToPool(obj, tag);
+        }
+    }
+    
+    /// <summary>
+    /// 모든 활성 오브젝트를 풀로 반환합니다.
+    /// </summary>
+    public void ReturnAllToPool()
+    {
+        var objectsToReturn = new List<GameObject>(_spawnedObjects.Keys);
+        
+        foreach (var obj in objectsToReturn)
+        {
+            string tag = _spawnedObjects[obj];
+            ReturnToPool(obj, tag);
+        }
+    }
+}
+
+/// <summary>
+/// 풀링된 오브젝트가 구현해야 하는 인터페이스
+/// </summary>
+public interface IPooledObject
+{
+    void OnObjectSpawn();
+}

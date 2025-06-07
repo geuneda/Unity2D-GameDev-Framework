@@ -1,126 +1,164 @@
 using UnityEngine;
-using System.Collections;
+using System.Collections.Generic;
 
-namespace Unity2DFramework.Core.Managers
+/// <summary>
+/// 게임의 전체적인 흐름을 관리하는 싱글톤 매니저 클래스
+/// 다른 매니저들의 생성 및 초기화를 담당합니다.
+/// </summary>
+public class GameManager : MonoBehaviour
 {
-    /// <summary>
-    /// 게임의 전반적인 상태와 흐름을 관리하는 핵심 매니저
-    /// 싱글톤 패턴으로 구현되어 전역 접근 가능
-    /// </summary>
-    public class GameManager : MonoBehaviour
+    #region 싱글톤
+    private static GameManager _instance;
+    
+    public static GameManager Instance
     {
-        public static GameManager Instance { get; private set; }
-        
-        [Header("게임 설정")]
-        [SerializeField] private bool isPaused = false;
-        [SerializeField] private float gameSpeed = 1f;
-        
-        // 게임 상태 이벤트
-        public System.Action OnGameStart;
-        public System.Action OnGamePause;
-        public System.Action OnGameResume;
-        public System.Action OnGameEnd;
-        
-        // 캐싱된 컴포넌트 참조
-        private AudioManager audioManager;
-        private InputManager inputManager;
-        private SceneTransitionManager sceneManager;
-        
-        private void Awake()
+        get
         {
-            // 싱글톤 패턴 구현
-            if (Instance == null)
+            if (_instance == null)
             {
-                Instance = this;
-                DontDestroyOnLoad(gameObject);
-                InitializeManagers();
+                GameObject go = new GameObject("GameManager");
+                _instance = go.AddComponent<GameManager>();
+                DontDestroyOnLoad(go);
             }
-            else
-            {
-                Destroy(gameObject);
-            }
+            return _instance;
         }
-        
-        /// <summary>
-        /// 모든 매니저들을 초기화
-        /// </summary>
-        private void InitializeManagers()
+    }
+    #endregion
+
+    [SerializeField] private bool _isGamePaused = false;
+    
+    // 다른 매니저들에 대한 참조
+    private AudioManager _audioManager;
+    private InputManager _inputManager;
+    private UIManager _uiManager;
+    private PoolManager _poolManager;
+    private SceneController _sceneController;
+    
+    // 이벤트 시스템
+    private Dictionary<string, System.Action> _eventDictionary;
+    
+    /// <summary>
+    /// 게임이 일시정지 상태인지 여부
+    /// </summary>
+    public bool IsGamePaused
+    {
+        get => _isGamePaused;
+        set
         {
-            // 매니저 참조 캐싱
-            audioManager = AudioManager.Instance;
-            inputManager = InputManager.Instance;
-            sceneManager = SceneTransitionManager.Instance;
+            _isGamePaused = value;
+            Time.timeScale = _isGamePaused ? 0f : 1f;
             
-            // 각 매니저 초기화
-            audioManager?.Initialize();
-            inputManager?.Initialize();
-            sceneManager?.Initialize();
+            // 게임 일시정지 이벤트 발생
+            TriggerEvent(_isGamePaused ? "OnGamePaused" : "OnGameResumed");
+        }
+    }
+
+    private void Awake()
+    {
+        // 싱글톤 패턴 적용
+        if (_instance != null && _instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        _instance = this;
+        DontDestroyOnLoad(gameObject);
+        
+        // 이벤트 시스템 초기화
+        _eventDictionary = new Dictionary<string, System.Action>();
+        
+        InitializeManagers();
+    }
+
+    /// <summary>
+    /// 모든 매니저들을 초기화합니다.
+    /// </summary>
+    private void InitializeManagers()
+    {
+        // 각 매니저 인스턴스 생성 및 초기화
+        _audioManager = AudioManager.Instance;
+        _inputManager = InputManager.Instance;
+        _uiManager = UIManager.Instance;
+        _poolManager = PoolManager.Instance;
+        _sceneController = SceneController.Instance;
+        
+        // 각 매니저 초기화
+        _audioManager.Initialize();
+        _inputManager.Initialize();
+        _uiManager.Initialize();
+        _poolManager.Initialize();
+        _sceneController.Initialize();
+    }
+    
+    /// <summary>
+    /// 이벤트를 구독합니다.
+    /// </summary>
+    public void SubscribeEvent(string eventName, System.Action listener)
+    {
+        if (_eventDictionary.ContainsKey(eventName))
+        {
+            _eventDictionary[eventName] += listener;
+        }
+        else
+        {
+            _eventDictionary.Add(eventName, listener);
+        }
+    }
+    
+    /// <summary>
+    /// 이벤트 구독을 취소합니다.
+    /// </summary>
+    public void UnsubscribeEvent(string eventName, System.Action listener)
+    {
+        if (_eventDictionary.ContainsKey(eventName))
+        {
+            _eventDictionary[eventName] -= listener;
             
-            Debug.Log("[GameManager] 모든 매니저 초기화 완료");
-        }
-        
-        /// <summary>
-        /// 게임 시작
-        /// </summary>
-        public void StartGame()
-        {
-            isPaused = false;
-            Time.timeScale = gameSpeed;
-            OnGameStart?.Invoke();
-            Debug.Log("[GameManager] 게임 시작");
-        }
-        
-        /// <summary>
-        /// 게임 일시정지
-        /// </summary>
-        public void PauseGame()
-        {
-            if (!isPaused)
+            // 이벤트에 더 이상 리스너가 없으면 제거
+            if (_eventDictionary[eventName] == null)
             {
-                isPaused = true;
-                Time.timeScale = 0f;
-                OnGamePause?.Invoke();
-                Debug.Log("[GameManager] 게임 일시정지");
+                _eventDictionary.Remove(eventName);
             }
         }
-        
-        /// <summary>
-        /// 게임 재개
-        /// </summary>
-        public void ResumeGame()
+    }
+    
+    /// <summary>
+    /// 이벤트를 발생시킵니다.
+    /// </summary>
+    public void TriggerEvent(string eventName)
+    {
+        if (_eventDictionary.TryGetValue(eventName, out System.Action callback))
         {
-            if (isPaused)
-            {
-                isPaused = false;
-                Time.timeScale = gameSpeed;
-                OnGameResume?.Invoke();
-                Debug.Log("[GameManager] 게임 재개");
-            }
+            callback?.Invoke();
         }
-        
-        /// <summary>
-        /// 게임 종료
-        /// </summary>
-        public void EndGame()
-        {
-            OnGameEnd?.Invoke();
-            Debug.Log("[GameManager] 게임 종료");
-        }
-        
-        /// <summary>
-        /// 게임 속도 설정
-        /// </summary>
-        public void SetGameSpeed(float speed)
-        {
-            gameSpeed = Mathf.Clamp(speed, 0f, 3f);
-            if (!isPaused)
-            {
-                Time.timeScale = gameSpeed;
-            }
-        }
-        
-        // 프로퍼티
-        public bool IsPaused => isPaused;
-        public float GameSpeed => gameSpeed;
+    }
+    
+    /// <summary>
+    /// 게임을 일시정지합니다.
+    /// </summary>
+    public void PauseGame()
+    {
+        IsGamePaused = true;
+    }
+    
+    /// <summary>
+    /// 게임을 재개합니다.
+    /// </summary>
+    public void ResumeGame()
+    {
+        IsGamePaused = false;
+    }
+    
+    /// <summary>
+    /// 게임을 종료합니다.
+    /// </summary>
+    public void QuitGame()
+    {
+        #if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+        #else
+        Application.Quit();
+        #endif
     }
 }
