@@ -1,198 +1,201 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-/// <summary>
-/// 플레이어 입력을 처리하는 컨트롤러 클래스
-/// 캐릭터 이동, 점프, 공격 등의 입력을 감지하고 처리합니다.
-/// </summary>
-public class PlayerInputController : MonoBehaviour
+namespace Unity2DFramework.Core.Input
 {
-    // 입력 이벤트에 대한 델리게이트 정의
-    public delegate void MoveInputEvent(Vector2 moveInput);
-    public delegate void JumpInputEvent();
-    public delegate void AttackInputEvent();
-    public delegate void InteractInputEvent();
-    public delegate void PauseInputEvent();
-    
-    // 이벤트 선언
-    public event MoveInputEvent OnMoveInput;
-    public event JumpInputEvent OnJumpStarted;
-    public event JumpInputEvent OnJumpCanceled;
-    public event AttackInputEvent OnAttackPerformed;
-    public event InteractInputEvent OnInteractPerformed;
-    public event PauseInputEvent OnPausePerformed;
-    
-    [SerializeField] private InputActionAsset _inputActions;
-    
-    // 입력 액션 참조 캐싱을 위한 변수
-    private InputAction _moveAction;
-    private InputAction _jumpAction;
-    private InputAction _attackAction;
-    private InputAction _interactAction;
-    private InputAction _pauseAction;
-    
-    private bool _isInputEnabled = true;
-    
     /// <summary>
-    /// 입력 활성화 여부를 설정합니다.
+    /// 플레이어 입력을 처리하고 플레이어 컨트롤러에 전달하는 컴포넌트
     /// </summary>
-    public bool IsInputEnabled
+    public class PlayerInputController : MonoBehaviour
     {
-        get => _isInputEnabled;
-        set
+        // 이동 관련 이벤트
+        public System.Action<Vector2> OnMoveInput;
+        
+        // 액션 이벤트
+        public System.Action OnJumpInput;
+        public System.Action OnJumpCanceledInput;
+        public System.Action OnAttackInput;
+        public System.Action OnInteractInput;
+        public System.Action OnNextInput;
+        public System.Action OnPreviousInput;
+        public System.Action<bool> OnSprintInput;
+        
+        // 메뉴 이벤트
+        public System.Action OnPauseInput;
+        
+        // 추가 상태 정보
+        private Vector2 currentMoveInput;
+        
+        private InputManager inputManager;
+        
+        private void Awake()
         {
-            _isInputEnabled = value;
-            if (_isInputEnabled)
+            // InputManager 인스턴스 확인
+            if (InputManager.Instance == null)
             {
-                EnableAllInput();
+                Debug.LogError("[PlayerInputController] InputManager 인스턴스가 없습니다. 씬에 InputManager 객체가 있는지 확인하세요.");
             }
             else
             {
-                DisableAllInput();
+                inputManager = InputManager.Instance;
             }
         }
-    }
-    
-    private void Awake()
-    {
-        if (_inputActions == null)
+        
+        private void OnEnable()
         {
-            Debug.LogError("PlayerInputController: InputActionAsset이 설정되지 않았습니다.");
-            return;
+            if (inputManager != null)
+            {
+                // 입력 이벤트에 핸들러 등록
+                inputManager.OnMove += HandleMoveInput;
+                inputManager.OnJump += HandleJumpInput;
+                inputManager.OnJumpCanceled += HandleJumpCanceledInput;
+                inputManager.OnAttack += HandleAttackInput;
+                inputManager.OnInteract += HandleInteractInput;
+                inputManager.OnPause += HandlePauseInput;
+                inputManager.OnNext += HandleNextInput;
+                inputManager.OnPrevious += HandlePreviousInput;
+                inputManager.OnSprint += HandleSprintInput;
+            }
         }
         
-        // 필요한 액션들 참조 캐싱
-        _moveAction = _inputActions.FindAction("Player/Move");
-        _jumpAction = _inputActions.FindAction("Player/Jump");
-        _attackAction = _inputActions.FindAction("Player/Attack");
-        _interactAction = _inputActions.FindAction("Player/Interact");
-        _pauseAction = _inputActions.FindAction("UI/Pause");
-        
-        // 액션들에 콜백 등록
-        _moveAction.performed += OnMove;
-        _moveAction.canceled += OnMove;
-        
-        _jumpAction.performed += OnJump;
-        _jumpAction.canceled += OnJumpCanceled;
-        
-        _attackAction.performed += OnAttack;
-        _interactAction.performed += OnInteract;
-        _pauseAction.performed += OnPause;
-    }
-    
-    private void OnEnable()
-    {
-        // 모든 입력 활성화
-        EnableAllInput();
-    }
-    
-    private void OnDisable()
-    {
-        // 모든 입력 비활성화
-        DisableAllInput();
-    }
-    
-    /// <summary>
-    /// 모든 입력을 활성화합니다.
-    /// </summary>
-    public void EnableAllInput()
-    {
-        _inputActions.Enable();
-    }
-    
-    /// <summary>
-    /// 모든 입력을 비활성화합니다.
-    /// </summary>
-    public void DisableAllInput()
-    {
-        _inputActions.Disable();
-    }
-    
-    /// <summary>
-    /// 게임 플레이 관련 입력만 활성화합니다.
-    /// </summary>
-    public void EnableGameplayInput()
-    {
-        var playerMap = _inputActions.FindActionMap("Player");
-        if (playerMap != null)
+        private void OnDisable()
         {
-            playerMap.Enable();
-        }
-    }
-    
-    /// <summary>
-    /// UI 관련 입력만 활성화합니다.
-    /// </summary>
-    public void EnableUIInput()
-    {
-        var uiMap = _inputActions.FindActionMap("UI");
-        if (uiMap != null)
-        {
-            uiMap.Enable();
-        }
-    }
-    
-    // 입력 콜백 메서드들
-    private void OnMove(InputAction.CallbackContext context)
-    {
-        if (!_isInputEnabled) return;
-        
-        Vector2 input = context.ReadValue<Vector2>();
-        OnMoveInput?.Invoke(input);
-    }
-    
-    private void OnJump(InputAction.CallbackContext context)
-    {
-        if (!_isInputEnabled || !context.performed) return;
-        
-        OnJumpStarted?.Invoke();
-    }
-    
-    private void OnJumpCanceled(InputAction.CallbackContext context)
-    {
-        if (!_isInputEnabled || !context.canceled) return;
-        
-        OnJumpCanceled?.Invoke();
-    }
-    
-    private void OnAttack(InputAction.CallbackContext context)
-    {
-        if (!_isInputEnabled || !context.performed) return;
-        
-        OnAttackPerformed?.Invoke();
-    }
-    
-    private void OnInteract(InputAction.CallbackContext context)
-    {
-        if (!_isInputEnabled || !context.performed) return;
-        
-        OnInteractPerformed?.Invoke();
-    }
-    
-    private void OnPause(InputAction.CallbackContext context)
-    {
-        if (!context.performed) return;
-        
-        OnPausePerformed?.Invoke();
-    }
-    
-    private void OnDestroy()
-    {
-        // 콜백 제거
-        if (_moveAction != null)
-        {
-            _moveAction.performed -= OnMove;
-            _moveAction.canceled -= OnMove;
+            if (inputManager != null)
+            {
+                // 입력 이벤트에서 핸들러 제거
+                inputManager.OnMove -= HandleMoveInput;
+                inputManager.OnJump -= HandleJumpInput;
+                inputManager.OnJumpCanceled -= HandleJumpCanceledInput;
+                inputManager.OnAttack -= HandleAttackInput;
+                inputManager.OnInteract -= HandleInteractInput;
+                inputManager.OnPause -= HandlePauseInput;
+                inputManager.OnNext -= HandleNextInput;
+                inputManager.OnPrevious -= HandlePreviousInput;
+                inputManager.OnSprint -= HandleSprintInput;
+            }
         }
         
-        if (_jumpAction != null)
+        #region 입력 핸들러
+        /// <summary>
+        /// 이동 입력 처리
+        /// </summary>
+        private void HandleMoveInput(Vector2 moveInput)
         {
-            _jumpAction.performed -= OnJump;
-            _jumpAction.canceled -= OnJumpCanceled;
+            currentMoveInput = moveInput;
+            OnMoveInput?.Invoke(moveInput);
         }
         
-        if (_attackAction != null) _attackAction.performed -= OnAttack;
-        if (_interactAction != null) _interactAction.performed -= OnInteract;
-        if (_pauseAction != null) _pauseAction.performed -= OnPause;
+        /// <summary>
+        /// 점프 입력 처리
+        /// </summary>
+        private void HandleJumpInput()
+        {
+            OnJumpInput?.Invoke();
+        }
+        
+        /// <summary>
+        /// 점프 취소 입력 처리
+        /// </summary>
+        private void HandleJumpCanceledInput()
+        {
+            OnJumpCanceledInput?.Invoke();
+        }
+        
+        /// <summary>
+        /// 공격 입력 처리
+        /// </summary>
+        private void HandleAttackInput()
+        {
+            OnAttackInput?.Invoke();
+        }
+        
+        /// <summary>
+        /// 상호작용 입력 처리
+        /// </summary>
+        private void HandleInteractInput()
+        {
+            OnInteractInput?.Invoke();
+        }
+        
+        /// <summary>
+        /// 일시정지 입력 처리
+        /// </summary>
+        private void HandlePauseInput()
+        {
+            OnPauseInput?.Invoke();
+        }
+        
+        /// <summary>
+        /// 다음 아이템/스킬 선택 입력 처리
+        /// </summary>
+        private void HandleNextInput()
+        {
+            OnNextInput?.Invoke();
+        }
+        
+        /// <summary>
+        /// 이전 아이템/스킬 선택 입력 처리
+        /// </summary>
+        private void HandlePreviousInput()
+        {
+            OnPreviousInput?.Invoke();
+        }
+        
+        /// <summary>
+        /// 달리기 입력 처리
+        /// </summary>
+        private void HandleSprintInput(bool isSprinting)
+        {
+            OnSprintInput?.Invoke(isSprinting);
+        }
+        #endregion
+        
+        /// <summary>
+        /// 현재 이동 입력 벡터 반환
+        /// </summary>
+        public Vector2 GetMoveInput()
+        {
+            return currentMoveInput;
+        }
+        
+        /// <summary>
+        /// 입력을 활성화 또는 비활성화합니다.
+        /// </summary>
+        public void SetInputEnabled(bool enabled)
+        {
+            if (inputManager != null)
+            {
+                if (enabled)
+                {
+                    inputManager.EnablePlayerInput();
+                }
+                else
+                {
+                    inputManager.DisableAllInput();
+                }
+            }
+        }
+        
+        /// <summary>
+        /// UI 모드로 전환합니다. (게임 입력 비활성화, UI 입력 활성화)
+        /// </summary>
+        public void EnableUIMode()
+        {
+            if (inputManager != null)
+            {
+                inputManager.EnableUIInput();
+            }
+        }
+        
+        /// <summary>
+        /// 게임 모드로 전환합니다. (게임 입력 활성화, UI 입력 비활성화)
+        /// </summary>
+        public void EnableGameMode()
+        {
+            if (inputManager != null)
+            {
+                inputManager.EnablePlayerInput();
+            }
+        }
     }
 }

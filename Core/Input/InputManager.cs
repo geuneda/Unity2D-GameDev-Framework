@@ -25,6 +25,9 @@ namespace Unity2DFramework.Core.Input
         private InputAction attackAction;
         private InputAction interactAction;
         private InputAction pauseAction;
+        private InputAction nextAction;
+        private InputAction previousAction;
+        private InputAction sprintAction;
         
         // 입력 이벤트들
         public System.Action<Vector2> OnMove;
@@ -33,6 +36,9 @@ namespace Unity2DFramework.Core.Input
         public System.Action OnAttack;
         public System.Action OnInteract;
         public System.Action OnPause;
+        public System.Action OnNext;
+        public System.Action OnPrevious;
+        public System.Action<bool> OnSprint;
         
         // 입력 상태
         private Vector2 currentMoveInput;
@@ -44,6 +50,7 @@ namespace Unity2DFramework.Core.Input
             {
                 Instance = this;
                 DontDestroyOnLoad(gameObject);
+                Initialize();
             }
             else
             {
@@ -58,13 +65,25 @@ namespace Unity2DFramework.Core.Input
         {
             if (inputActionAsset == null)
             {
-                Debug.LogError("[InputManager] InputActionAsset이 설정되지 않았습니다!");
-                return;
+                // 리소스에서 입력 액션 에셋을 로드
+                inputActionAsset = Resources.Load<InputActionAsset>("InputSystem_Actions");
+                
+                if (inputActionAsset == null)
+                {
+                    Debug.LogError("[InputManager] InputActionAsset을 찾을 수 없습니다!");
+                    return;
+                }
             }
             
             // 액션 맵 가져오기
             playerActionMap = inputActionAsset.FindActionMap("Player");
             uiActionMap = inputActionAsset.FindActionMap("UI");
+            
+            if (playerActionMap == null)
+            {
+                Debug.LogError("[InputManager] Player 액션 맵을 찾을 수 없습니다!");
+                return;
+            }
             
             // 액션들 캐싱
             CacheInputActions();
@@ -89,7 +108,15 @@ namespace Unity2DFramework.Core.Input
                 jumpAction = playerActionMap.FindAction("Jump");
                 attackAction = playerActionMap.FindAction("Attack");
                 interactAction = playerActionMap.FindAction("Interact");
-                pauseAction = playerActionMap.FindAction("Pause");
+                pauseAction = playerActionMap.FindAction("Pause", false);
+                nextAction = playerActionMap.FindAction("Next");
+                previousAction = playerActionMap.FindAction("Previous");
+                sprintAction = playerActionMap.FindAction("Sprint");
+                
+                if (pauseAction == null && uiActionMap != null)
+                {
+                    pauseAction = uiActionMap.FindAction("Pause", false);
+                }
             }
         }
         
@@ -129,6 +156,25 @@ namespace Unity2DFramework.Core.Input
             {
                 pauseAction.performed += OnPausePerformed;
             }
+            
+            // Next 액션
+            if (nextAction != null)
+            {
+                nextAction.performed += OnNextPerformed;
+            }
+            
+            // Previous 액션
+            if (previousAction != null)
+            {
+                previousAction.performed += OnPreviousPerformed;
+            }
+            
+            // Sprint 액션
+            if (sprintAction != null)
+            {
+                sprintAction.performed += OnSprintPerformed;
+                sprintAction.canceled += OnSprintCanceled;
+            }
         }
         
         /// <summary>
@@ -161,6 +207,22 @@ namespace Unity2DFramework.Core.Input
             if (pauseAction != null)
             {
                 pauseAction.performed -= OnPausePerformed;
+            }
+            
+            if (nextAction != null)
+            {
+                nextAction.performed -= OnNextPerformed;
+            }
+            
+            if (previousAction != null)
+            {
+                previousAction.performed -= OnPreviousPerformed;
+            }
+            
+            if (sprintAction != null)
+            {
+                sprintAction.performed -= OnSprintPerformed;
+                sprintAction.canceled -= OnSprintCanceled;
             }
         }
         
@@ -206,6 +268,30 @@ namespace Unity2DFramework.Core.Input
         private void OnPausePerformed(InputAction.CallbackContext context)
         {
             OnPause?.Invoke();
+        }
+        
+        private void OnNextPerformed(InputAction.CallbackContext context)
+        {
+            if (!isInputEnabled) return;
+            OnNext?.Invoke();
+        }
+        
+        private void OnPreviousPerformed(InputAction.CallbackContext context)
+        {
+            if (!isInputEnabled) return;
+            OnPrevious?.Invoke();
+        }
+        
+        private void OnSprintPerformed(InputAction.CallbackContext context)
+        {
+            if (!isInputEnabled) return;
+            OnSprint?.Invoke(true);
+        }
+        
+        private void OnSprintCanceled(InputAction.CallbackContext context)
+        {
+            if (!isInputEnabled) return;
+            OnSprint?.Invoke(false);
         }
         
         /// <summary>
