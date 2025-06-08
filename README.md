@@ -9,6 +9,7 @@ Unity 2D 게임 개발에 필요한 핵심 프레임워크와 유틸리티를 �
 - **컴포넌트 참조 캐싱**: 성능을 위한 참조 최적화
 - **오브젝트 풀링**: 메모리 효율적인 오브젝트 관리
 - **가비지 컬렉션 최소화**: 메모리 할당 최적화
+- **ServiceLocator 패턴**: 중앙집중식 서비스 관리로 Find 사용 완전 제거
 
 ### 🎮 입력 시스템
 - **새로운 Unity Input System**: 최신 입력 시스템만 사용
@@ -31,6 +32,10 @@ Unity 2D 게임 개발에 필요한 핵심 프레임워크와 유틸리티를 �
 Unity2D-GameDev-Framework/
 ├── Core/                    # 핵심 시스템
 │   ├── Managers/           # 게임 매니저들
+│   │   ├── ServiceLocator.cs    # 중앙집중식 서비스 관리
+│   │   ├── GameManager.cs       # 게임 전체 관리
+│   │   ├── AudioManager.cs      # 오디오 관리
+│   │   └── PoolManager.cs       # 오브젝트 풀링
 │   ├── Input/              # 입력 시스템
 │   ├── Audio/              # 오디오 시스템
 │   └── Scene/              # 씬 관리
@@ -59,6 +64,7 @@ Unity2D-GameDev-Framework/
 └── Examples/               # 사용 예제
     ├── Scenes/             # 예제 씬
     └── Scripts/            # 예제 스크립트
+        └── ServiceLocatorExample.cs  # ServiceLocator 사용 예제
 ```
 
 ## 🚀 시작하기
@@ -78,6 +84,33 @@ Unity2D-GameDev-Framework/
    - Addressable Asset System
 
 ## ✨ 주요 기능
+
+### 🏗️ ServiceLocator - 중앙집중식 서비스 관리
+Find 사용을 완전히 제거하고 성능을 최적화하는 서비스 관리 시스템:
+
+```csharp
+// 서비스 등록 (게임 초기화 시)
+ServiceLocator.Instance.RegisterService<AudioManager>(audioManager);
+ServiceLocator.Instance.RegisterService<UIManager>(uiManager);
+
+// 서비스 사용 (캐싱된 참조로 빠른 접근)
+public class WeaponController : MonoBehaviour
+{
+    private AudioManager audioManager;
+    
+    private void Start()
+    {
+        // 한 번만 가져와서 캐싱
+        audioManager = ServiceLocator.Instance.GetService<AudioManager>();
+    }
+    
+    public void FireWeapon()
+    {
+        // 캐싱된 참조 사용으로 빠른 접근
+        audioManager?.PlaySFX("WeaponFire");
+    }
+}
+```
 
 ### 🔄 오브젝트 풀링
 메모리 관리와 성능 최적화를 위한 강력한 오브젝트 풀링 시스템:
@@ -166,6 +199,46 @@ await transform.ScaleSmooth(Vector3.one * 1.5f, 0.5f);
 canvasGroup.FadeIn(0.3f);
 rectTransform.BounceIn(0.5f);
 ```
+
+## 🎯 핵심 설계 원칙
+
+### 1. Find 사용 금지
+```csharp
+// ❌ 잘못된 방법 - Find 사용
+GameObject player = GameObject.Find("Player");
+
+// ✅ 올바른 방법 - ServiceLocator 사용
+PlayerController player = ServiceLocator.Instance.GetService<PlayerController>();
+```
+
+### 2. 참조 캐싱
+```csharp
+// ✅ 컴포넌트 참조는 반드시 캐싱
+public class HealthSystem : MonoBehaviour
+{
+    private AudioManager audioManager; // 캐싱된 참조
+    
+    private void Start()
+    {
+        audioManager = ServiceLocator.Instance.GetService<AudioManager>();
+    }
+}
+```
+
+### 3. 방어적 프로그래밍
+```csharp
+// ✅ 안전한 컴포넌트 접근
+if (gameObject.TryGetComponent<Rigidbody2D>(out var rb))
+{
+    rb.AddForce(Vector2.up * jumpForce);
+}
+```
+
+## 📚 상세 가이드
+
+- **[ServiceLocator 사용 가이드](Core/Managers/ServiceLocator/README.md)**: 중앙집중식 서비스 관리 시스템
+- **[입력 시스템 가이드](Core/Input/README.md)**: 새로운 Unity Input System 활용법
+- **[구글 시트 데이터 관리](#unity2d-게임-개발-프레임워크---구글-시트-데이터-관리-시스템)**: 게임 데이터 관리 시스템
 
 ## 📝 라이선스
 
