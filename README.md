@@ -11,6 +11,7 @@ Unity 2D 게임 개발에 필요한 핵심 프레임워크와 유틸리티를 �
 - **가비지 컬렉션 최소화**: 메모리 할당 최적화
 - **ServiceLocator 패턴**: 중앙집중식 서비스 관리로 Find 사용 완전 제거
 - **EventManager 시스템**: 이벤트 기반 통신으로 컴포넌트 간 결합도 최소화
+- **Addressable 에셋 관리**: Resources 폴더 대신 효율적인 에셋 로딩 시스템
 
 ### 🎮 입력 시스템
 - **새로운 Unity Input System**: 최신 입력 시스템만 사용
@@ -33,14 +34,21 @@ Unity 2D 게임 개발에 필요한 핵심 프레임워크와 유틸리티를 �
 Unity2D-GameDev-Framework/
 ├── Core/                    # 핵심 시스템
 │   ├── Managers/           # 게임 매니저들
-│   │   ├── ServiceLocator.cs    # 중앙집중식 서비스 관리
-│   │   ├── EventManager.cs      # 이벤트 기반 통신 시스템
-│   │   ├── GameManager.cs       # 게임 전체 관리
-│   │   ├── AudioManager.cs      # 오디오 관리
-│   │   └── PoolManager.cs       # 오브젝트 풀링
+│   │   ├── ServiceLocator.cs      # 중앙집중식 서비스 관리
+│   │   ├── EventManager.cs        # 이벤트 기반 통신 시스템
+│   │   ├── AddressableManager.cs  # Addressable 에셋 관리
+│   │   ├── GameManager.cs         # 게임 전체 관리
+│   │   ├── AudioManager.cs        # 오디오 관리
+│   │   └── PoolManager.cs         # 오브젝트 풀링
+│   ├── Assets/             # 에셋 관리 시스템
+│   │   ├── AddressableId.cs       # 타입 안전한 에셋 ID
+│   │   ├── AddressableHelper.cs   # Addressable 헬퍼
+│   │   └── README.md               # Addressable 시스템 가이드
 │   ├── Input/              # 입력 시스템
 │   ├── Audio/              # 오디오 시스템
 │   └── Scene/              # 씬 관리
+├── Editor/                 # 에디터 도구
+│   └── AddressableIdGenerator.cs  # Addressable ID 자동 생성
 ├── Gameplay/               # 게임플레이 관련
 │   ├── Player/             # 플레이어 시스템
 │   ├── Enemy/              # 적 시스템
@@ -67,7 +75,8 @@ Unity2D-GameDev-Framework/
     ├── Scenes/             # 예제 씬
     └── Scripts/            # 예제 스크립트
         ├── ServiceLocatorExample.cs  # ServiceLocator 사용 예제
-        └── EventManagerExample.cs    # EventManager 사용 예제
+        ├── EventManagerExample.cs    # EventManager 사용 예제
+        └── AddressableExample.cs     # Addressable 사용 예제
 ```
 
 ## 🚀 시작하기
@@ -77,14 +86,17 @@ Unity2D-GameDev-Framework/
 - .NET Standard 2.1
 - 새로운 Unity Input System 패키지
 - DOTween (Pro 권장)
+- Addressable Asset System
+- UniTask (권장)
 
 ### 설치 방법
 1. 이 레포지터리를 클론하거나 다운로드
 2. Unity 프로젝트에 필요한 스크립트 복사
 3. Package Manager에서 필수 패키지 설치:
    - Input System
-   - DOTween (Asset Store)
    - Addressable Asset System
+   - DOTween (Asset Store)
+   - UniTask (Package Manager)
 
 ## ✨ 주요 기능
 
@@ -136,6 +148,28 @@ private void OnDamageDealt(object args)
         currentHealth -= data.amount;
     }
 }
+```
+
+### 📦 Addressable 에셋 관리 시스템
+Resources 폴더를 대체하는 효율적이고 타입 안전한 에셋 관리:
+
+```csharp
+// 타입 안전한 에셋 로드
+var playerPrefab = await AddressableHelper.LoadAssetAsync<GameObject>(AddressableId.Player_Character);
+
+// 프리팹 인스턴스화
+var player = await AddressableHelper.InstantiateAsync(AddressableId.Player_Character);
+
+// 라벨별 배치 로드
+var uiAssets = await AddressableHelper.LoadAssetsByLabelAsync<GameObject>(AddressableLabel.UI);
+
+// 필수 에셋 미리 로드
+bool success = await AddressableHelper.PreloadEssentialAssetsAsync(
+    progress => Debug.Log($"로드 진행률: {progress * 100:F1}%")
+);
+
+// 에셋 해제
+AddressableManager.Instance.ReleaseAsset(AddressableId.Player_Character.GetAddress());
 ```
 
 ### 🔄 오브젝트 풀링
@@ -192,8 +226,8 @@ private void OnJumpInput(InputAction.CallbackContext context)
 원활한 씬 전환과 데이터 관리:
 
 ```csharp
-// 씬 전환
-await SceneController.Instance.LoadScene("GameLevel");
+// Addressable 씬 전환
+await AddressableManager.Instance.LoadSceneAsync(AddressableId.Scene_GameLevel1.GetAddress());
 
 // 씬 간 데이터 전달
 SceneController.Instance.SetPersistentData("PlayerScore", 1000);
@@ -240,7 +274,16 @@ PlayerController player = ServiceLocator.Instance.GetService<PlayerController>()
 EventManager.Dispatch(GameEventType.PlayerSpawn, playerData);
 ```
 
-### 2. 참조 캐싱
+### 2. Resources 폴더 사용 금지
+```csharp
+// ❌ 잘못된 방법 - Resources 사용
+GameObject prefab = Resources.Load<GameObject>("Prefabs/Player");
+
+// ✅ 올바른 방법 - Addressable 사용
+GameObject prefab = await AddressableHelper.LoadAssetAsync<GameObject>(AddressableId.Player_Character);
+```
+
+### 3. 참조 캐싱
 ```csharp
 // ✅ 컴포넌트 참조는 반드시 캐싱
 public class HealthSystem : MonoBehaviour
@@ -255,7 +298,7 @@ public class HealthSystem : MonoBehaviour
 }
 ```
 
-### 3. 이벤트 기반 통신
+### 4. 이벤트 기반 통신
 ```csharp
 // ✅ 컴포넌트 간 직접 참조 대신 이벤트 사용
 public class Enemy : MonoBehaviour
@@ -268,7 +311,7 @@ public class Enemy : MonoBehaviour
 }
 ```
 
-### 4. 방어적 프로그래밍
+### 5. 방어적 프로그래밍
 ```csharp
 // ✅ 안전한 컴포넌트 접근
 if (gameObject.TryGetComponent<Rigidbody2D>(out var rb))
@@ -279,20 +322,26 @@ if (gameObject.TryGetComponent<Rigidbody2D>(out var rb))
 
 ## 🔄 시스템 간 연동 예제
 
-### ServiceLocator + EventManager 통합 사용
+### ServiceLocator + EventManager + Addressable 통합 사용
 ```csharp
 public class GameBootstrap : MonoBehaviour
 {
-    [SerializeField] private AudioManager audioManager;
-    [SerializeField] private UIManager uiManager;
-    
-    private void Awake()
+    private async void Awake()
     {
-        // 1. ServiceLocator에 서비스 등록
+        // 1. Addressable 시스템 초기화
+        await AddressableManager.Instance.InitializeAsync();
+        
+        // 2. 필수 에셋 미리 로드
+        await AddressableHelper.PreloadEssentialAssetsAsync();
+        
+        // 3. 매니저들 로드 및 ServiceLocator 등록
+        var audioManager = await AddressableHelper.LoadAssetAsync<AudioManager>(AddressableId.Config_AudioSettings);
+        var uiManager = await AddressableHelper.LoadAssetAsync<UIManager>(AddressableId.Config_UISettings);
+        
         ServiceLocator.Instance.RegisterService<AudioManager>(audioManager);
         ServiceLocator.Instance.RegisterService<UIManager>(uiManager);
         
-        // 2. EventManager로 초기화 완료 알림
+        // 4. EventManager로 초기화 완료 알림
         EventManager.Dispatch(GameEventType.GameStart);
     }
 }
@@ -301,13 +350,20 @@ public class PlayerController : MonoBehaviour
 {
     private AudioManager audioManager;
     
-    private void Start()
+    private async void Start()
     {
         // ServiceLocator에서 서비스 가져오기
         audioManager = ServiceLocator.Instance.GetService<AudioManager>();
         
         // EventManager로 이벤트 구독
         EventManager.Subscribe(GameEventType.DamageDealt, OnTakeDamage);
+        
+        // Addressable로 플레이어 무기 로드
+        var weapon = await AddressableHelper.LoadAssetAsync<GameObject>(AddressableId.Weapon_Sword);
+        if (weapon != null)
+        {
+            Instantiate(weapon, transform);
+        }
     }
     
     private void OnTakeDamage(object args)
@@ -321,10 +377,18 @@ public class PlayerController : MonoBehaviour
 }
 ```
 
+## 🛠️ 에디터 도구
+
+### Addressable ID 자동 생성
+- **메뉴**: `Unity2D Framework > Tools > Generate Addressable IDs`
+- **기능**: Addressable 그룹의 에셋들을 분석하여 타입 안전한 ID 생성
+- **결과**: AddressableId.cs 파일 자동 생성
+
 ## 📚 상세 가이드
 
 - **[ServiceLocator 사용 가이드](Core/Managers/ServiceLocator/README.md)**: 중앙집중식 서비스 관리 시스템
 - **[EventManager 사용 가이드](Core/Managers/EventManager/README.md)**: 이벤트 기반 통신 시스템
+- **[Addressable 시스템 가이드](Core/Assets/README.md)**: 효율적인 에셋 관리 시스템
 - **[입력 시스템 가이드](Core/Input/README.md)**: 새로운 Unity Input System 활용법
 - **[구글 시트 데이터 관리](#unity2d-게임-개발-프레임워크---구글-시트-데이터-관리-시스템)**: 게임 데이터 관리 시스템
 
@@ -473,7 +537,7 @@ public class DataManager : MonoBehaviour
 ## 주의 사항
 
 - 구글 스프레드시트는 반드시 웹에서 접근 가능하도록 공유 설정되어 있어야 합니다.
-- 에디터 전용 기능이므로 빌드에는 포함되지 않습니다. 
+- 에디터 전용 기능이므로 빌드에는 포함되지 않습니다.
 - 데이터 변경 후에는 반드시 다시 파싱 작업을 수행해야 합니다.
 - 대량의 데이터를 처리할 경우 시간이 소요될 수 있습니다.
 
