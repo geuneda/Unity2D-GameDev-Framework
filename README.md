@@ -10,6 +10,7 @@ Unity 2D 게임 개발에 필요한 핵심 프레임워크와 유틸리티를 �
 - **오브젝트 풀링**: 메모리 효율적인 오브젝트 관리
 - **가비지 컬렉션 최소화**: 메모리 할당 최적화
 - **ServiceLocator 패턴**: 중앙집중식 서비스 관리로 Find 사용 완전 제거
+- **EventManager 시스템**: 이벤트 기반 통신으로 컴포넌트 간 결합도 최소화
 
 ### 🎮 입력 시스템
 - **새로운 Unity Input System**: 최신 입력 시스템만 사용
@@ -33,6 +34,7 @@ Unity2D-GameDev-Framework/
 ├── Core/                    # 핵심 시스템
 │   ├── Managers/           # 게임 매니저들
 │   │   ├── ServiceLocator.cs    # 중앙집중식 서비스 관리
+│   │   ├── EventManager.cs      # 이벤트 기반 통신 시스템
 │   │   ├── GameManager.cs       # 게임 전체 관리
 │   │   ├── AudioManager.cs      # 오디오 관리
 │   │   └── PoolManager.cs       # 오브젝트 풀링
@@ -64,7 +66,8 @@ Unity2D-GameDev-Framework/
 └── Examples/               # 사용 예제
     ├── Scenes/             # 예제 씬
     └── Scripts/            # 예제 스크립트
-        └── ServiceLocatorExample.cs  # ServiceLocator 사용 예제
+        ├── ServiceLocatorExample.cs  # ServiceLocator 사용 예제
+        └── EventManagerExample.cs    # EventManager 사용 예제
 ```
 
 ## 🚀 시작하기
@@ -108,6 +111,29 @@ public class WeaponController : MonoBehaviour
     {
         // 캐싱된 참조 사용으로 빠른 접근
         audioManager?.PlaySFX("WeaponFire");
+    }
+}
+```
+
+### 📡 EventManager - 이벤트 기반 통신 시스템
+컴포넌트 간 결합도를 최소화하는 Publisher-Subscriber 패턴 구현:
+
+```csharp
+// 이벤트 구독 (리스너 등록)
+EventManager.Subscribe(GameEventType.PlayerDeath, OnPlayerDeath);
+EventManager.Subscribe(GameEventType.DamageDealt, OnDamageDealt);
+
+// 이벤트 발생 (다른 컴포넌트들에게 알림)
+var damageData = new DamageData { amount = 50, source = gameObject };
+EventManager.Dispatch(GameEventType.DamageDealt, damageData);
+
+// 이벤트 처리
+private void OnDamageDealt(object args)
+{
+    if (args is DamageData data)
+    {
+        // 데미지 처리 로직
+        currentHealth -= data.amount;
     }
 }
 ```
@@ -209,6 +235,9 @@ GameObject player = GameObject.Find("Player");
 
 // ✅ 올바른 방법 - ServiceLocator 사용
 PlayerController player = ServiceLocator.Instance.GetService<PlayerController>();
+
+// ✅ 또는 EventManager 사용
+EventManager.Dispatch(GameEventType.PlayerSpawn, playerData);
 ```
 
 ### 2. 참조 캐싱
@@ -221,11 +250,25 @@ public class HealthSystem : MonoBehaviour
     private void Start()
     {
         audioManager = ServiceLocator.Instance.GetService<AudioManager>();
+        EventManager.Subscribe(GameEventType.DamageDealt, OnDamageDealt);
     }
 }
 ```
 
-### 3. 방어적 프로그래밍
+### 3. 이벤트 기반 통신
+```csharp
+// ✅ 컴포넌트 간 직접 참조 대신 이벤트 사용
+public class Enemy : MonoBehaviour
+{
+    private void Die()
+    {
+        // 직접 참조 대신 이벤트로 알림
+        EventManager.Dispatch(GameEventType.EnemyDeath, this);
+    }
+}
+```
+
+### 4. 방어적 프로그래밍
 ```csharp
 // ✅ 안전한 컴포넌트 접근
 if (gameObject.TryGetComponent<Rigidbody2D>(out var rb))
@@ -234,9 +277,54 @@ if (gameObject.TryGetComponent<Rigidbody2D>(out var rb))
 }
 ```
 
+## 🔄 시스템 간 연동 예제
+
+### ServiceLocator + EventManager 통합 사용
+```csharp
+public class GameBootstrap : MonoBehaviour
+{
+    [SerializeField] private AudioManager audioManager;
+    [SerializeField] private UIManager uiManager;
+    
+    private void Awake()
+    {
+        // 1. ServiceLocator에 서비스 등록
+        ServiceLocator.Instance.RegisterService<AudioManager>(audioManager);
+        ServiceLocator.Instance.RegisterService<UIManager>(uiManager);
+        
+        // 2. EventManager로 초기화 완료 알림
+        EventManager.Dispatch(GameEventType.GameStart);
+    }
+}
+
+public class PlayerController : MonoBehaviour
+{
+    private AudioManager audioManager;
+    
+    private void Start()
+    {
+        // ServiceLocator에서 서비스 가져오기
+        audioManager = ServiceLocator.Instance.GetService<AudioManager>();
+        
+        // EventManager로 이벤트 구독
+        EventManager.Subscribe(GameEventType.DamageDealt, OnTakeDamage);
+    }
+    
+    private void OnTakeDamage(object args)
+    {
+        // ServiceLocator로 가져온 서비스 사용
+        audioManager?.PlaySFX("PlayerHurt");
+        
+        // EventManager로 다른 이벤트 발생
+        EventManager.Dispatch(GameEventType.PlayerHealthChanged, currentHealth);
+    }
+}
+```
+
 ## 📚 상세 가이드
 
 - **[ServiceLocator 사용 가이드](Core/Managers/ServiceLocator/README.md)**: 중앙집중식 서비스 관리 시스템
+- **[EventManager 사용 가이드](Core/Managers/EventManager/README.md)**: 이벤트 기반 통신 시스템
 - **[입력 시스템 가이드](Core/Input/README.md)**: 새로운 Unity Input System 활용법
 - **[구글 시트 데이터 관리](#unity2d-게임-개발-프레임워크---구글-시트-데이터-관리-시스템)**: 게임 데이터 관리 시스템
 
