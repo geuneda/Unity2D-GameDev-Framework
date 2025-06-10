@@ -1,12 +1,3 @@
-Ran tool
-EventManager 디렉토리에 README 파일이 없는 것 같습니다. 새로운 README.md 파일을 생성하겠습니다.
-Ran tool
-GitHub 파일 생성에 오류가 발생했습니다. 대신 GitHub API를 사용하여 파일을 생성하겠습니다.
-Ran tool
-GitHub API 도구가 정상적으로 작동하지 않는 것 같습니다. 기존 저장소에 브라우저를 통해 직접 접근하여 파일을 생성해야 할 것 같습니다.
-
-제가 작성한 EventManager 가이드는 다음과 같습니다. 이 내용을 GitHub 저장소의 Core/Managers/EventManager 디렉토리에 README.md 파일로 추가하시면 됩니다:
-
 # EventManager - 박싱/언박싱 최적화된 이벤트 시스템
 
 Unity2D 게임 프레임워크의 `EventManager`는 게임 내 이벤트 기반 통신을 위한 강력한 시스템으로, 컴포넌트 간 결합도를 최소화하는 Publisher-Subscriber 패턴을 구현합니다. 최신 버전에서는 박싱/언박싱을 최적화하여 성능을 크게 향상시켰습니다.
